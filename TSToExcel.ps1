@@ -86,8 +86,6 @@ function Export-TSToExcel
         [switch] $HideProgress
     )
 
-    #$ErrorActionPreference = "Stop"
-
     try
     {
         Set-Variable -Name TSName -Option AllScope
@@ -120,12 +118,10 @@ function Export-TSToExcel
             # not an excel file
             if ($ExportPath.Extension -ne ".xlsx" -and $ExportPath.Extension -ne ".xlsm") {
                 throw "The specified export path does not appear to be an Excel file. Please make sure the path ends with the .xlsx or .xlsm extensions."
-                #Write-Error -Message $m -Category InvalidArgument -TargetObject $ExportPath
             }
             # macro is used, but path is not macro-enabled
             if ($Macro -and $ExportPath.Extension -eq ".xlsx") {
                 throw "The -Macro switch was used, but the path is not for a macro-enabled file. Please use a file path that ends with .xlsm, or omit the -Macro switch."
-                #Write-Error -Message $m -Category InvalidArgument -TargetObject $ExportPath
             }
             # macro is not used, but path is macro-enabled
             if ($ExportPath.Extension -eq ".xlsm" -and -not $Macro) {
@@ -143,8 +139,30 @@ function Export-TSToExcel
 
         # VBA docs apply to this com object: https://docs.microsoft.com/en-us/office/vba/api/overview/excel
         $excel = New-Object -ComObject Excel.Application
+
+        # vba security settings
+        if ($Macro -and (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Office\$($excel.Version)\Excel\Security").AccessVBOM -ne 1) {
+            $q = "To use macro buttons, the following registry change will occur:`n" +
+            "    HKCU\Software\Microsoft\Office\$($excel.Version)\Excel\Security\AccessVBOM = 1`n" +
+            "This will give scripts access to the VBA object model, so they can add and execute VBA code in documents. Is this okay?`n" +
+            "You can also set this in Excel by going to File > Options > Trust Center > Trust Center Settings > Macro Settings.`n" +
+            "If you prefer to not allow VBA access, you can use -Outline instead of -Macro to group rows together."
+
+            $choices = "&Yes", "&No"
+            $result = $Host.UI.PromptForChoice("Access VBA Object Model", $q, $choices, 1)
+            switch ($result) {
+                0 {
+                    New-ItemProperty -Path "HKCU:\Software\Microsoft\Office\$($excel.Version)\Excel\Security" -Name AccessVBOM -Value 1 -Force | Out-Null
+                }
+                Default { return }
+            }
+        }
+        Write-Host $ResetRegistryVBOM
+
         $wb = $excel.Workbooks.Add()
         $ws = $wb.ActiveSheet
+
+        $excel.DisplayAlerts = $false
 
         if (-not $HideProgress) {
             Write-Progress -Activity "Generating Excel sheet..." -Status "Preparing..." -PercentComplete 0
@@ -175,8 +193,6 @@ function Export-TSToExcel
         $TotalEntries = ([regex]"<step").Matches($outer).Count + ([regex]"<group").Matches($outer).Count
 
         if ($Macro) {
-            #New-ItemProperty -Path "HKCU:\Software\Microsoft\Office\$($excel.Version)\excel\Security" -TSName AccessVBOM -Value 1 -Force | Out-Null
-            #New-ItemProperty -Path "HKCU:\Software\Microsoft\Office\$($excel.Version)\excel\Security" -TSName VBAWarnings -Value 1 -Force | Out-Null
             $Module = $wb.VBProject.VBComponents.Add(1)
             $VbaModule =
     "Sub ToggleRowsHidden(rowsRange As String, triangle As Shape)
@@ -475,31 +491,27 @@ function Export-TSToExcel
         # save
         if ($null -ne $ExportPath)
         {
-            $excel.DisplayAlerts = $false
             if ($ExportPath.Extension -eq ".xlsx") {
                 $ws.SaveAs($ExportPath.FullName)
             } else {
                 $ws.SaveAs($ExportPath.FullName, 52)
             }
-            $excel.DisplayAlerts = $true
         }
 
         # show excel
         $excel.Visible = $Show
+        $excel.DisplayAlerts = $true
     }
     catch
     {
         Write-Error $_
-        if ($null -ne $excel) {
-            Write-Warning "Export-TSToExcel ended early due to an error! The Excel process might still be running in the background."
-        }
     }
     finally
     {
         if ($excel.Visible -eq $false)
         {
-            $wb.Close()
-            $excel.Quit()
+            if ($null -ne $wb) { $wb.Close() }
+            if ($null -ne $excel) { $excel.Quit() }
         }
 
         if ($null -ne $ws) { [System.Runtime.InteropServices.Marshal]::ReleaseComObject($ws) | Out-Null }
