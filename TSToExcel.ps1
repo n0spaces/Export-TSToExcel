@@ -107,7 +107,6 @@ function Export-TSToExcel
         elseif ($null -ne $XmlPath) {
             if (-not $XmlPath.Exists) {
                 throw "$XmlPath does not exist."
-                #Write-Error -Message "$XmlPath does not exist." -Category ObjectNotFound -TargetObject $XmlPath
             }
             $LastUpdated = Get-Date
             $Sequence = ([Xml](Get-Content $XmlPath)).sequence
@@ -134,8 +133,10 @@ function Export-TSToExcel
             $Show = $true
         }
 
-        $ColorGroup = 15189684
-        $ColorStep = 10086143
+        $ColorGroup = 0xE7C6B4
+        $ColorStep = 0x99E6FF
+        $ColorGroupDisabled = 0xC9C9C9
+        $ColorStepDisabled = 0xDBDBDB
 
         # VBA docs apply to this com object: https://docs.microsoft.com/en-us/office/vba/api/overview/excel
         $excel = New-Object -ComObject Excel.Application
@@ -173,14 +174,15 @@ function Export-TSToExcel
         $ws.Range("A1").Cells = $text
         $ws.Range("A1").Cells.Font.Bold = $true
         $ws.Range("A1").Cells.Font.Size = 14
-        $ws.Range("A1:E1").Merge()
+        $ws.Range("A1:F1").Merge()
 
         # headers
         $ws.Range("A2").Cells = "Name"
         $ws.Range("B2").Cells = "Type"
         $ws.Range("C2").Cells = "Description"
         $ws.Range("D2").Cells = "Conditions"
-        $ws.Range("E2").Cells = "Settings"
+        $ws.Range("E2").Cells = "Continue on Error"
+        $ws.Range("F2").Cells = "Settings"
         $ws.Rows("2").Font.Bold = $true
 
         # sheet formatting
@@ -195,17 +197,17 @@ function Export-TSToExcel
         if ($Macro) {
             $Module = $wb.VBProject.VBComponents.Add(1)
             $VbaModule =
-    "Sub ToggleRowsHidden(rowsRange As String, triangle As Shape)
-    Dim Rows As Range
-    Set Rows = ActiveSheet.Rows(rowsRange)
-    If Rows.Hidden Then
-        Rows.Hidden = False
-        triangle.Rotation = 180
-    Else
-        Rows.Hidden = True
-        triangle.Rotation = 90
-    End If
-    End Sub"
+"Sub ToggleRowsHidden(rowsRange As String, triangle As Shape)
+Dim Rows As Range
+Set Rows = ActiveSheet.Rows(rowsRange)
+If Rows.Hidden Then
+    Rows.Hidden = False
+    triangle.Rotation = 180
+Else
+    Rows.Hidden = True
+    triangle.Rotation = 90
+End If
+End Sub"
             $Module.CodeModule.AddFromString($VbaModule)
         }
 
@@ -345,7 +347,8 @@ function Export-TSToExcel
         {
             param (
                 $Entry,
-                $IndentLevel = 0
+                $IndentLevel = 0,
+                $Disabled = $false
             )
 
             if (-not $HideProgress) {
@@ -359,11 +362,24 @@ function Export-TSToExcel
             $ws.Range("C$CurrentRow").Cells = $Entry.GetAttribute("description")
             $ws.Range("D$CurrentRow").Cells = ParseCondition -Element $Entry.condition
 
+            if ($Entry.GetAttribute("disable") -eq "true") {
+                $Disabled = $true
+            }
+
+            if ($Entry.GetAttribute("continueOnError") -eq "true") {
+                $ws.Range("E$CurrentRow").Cells = "Yes"
+            }
+
             # steps
             if ($Entry.LocalName -eq "step")
             {
                 $ws.Range("A$CurrentRow").IndentLevel = $IndentLevel
-                $ws.Range("A$($CurrentRow):E$CurrentRow").Interior.Color = $ColorStep
+                if ($Disabled) {
+                    $ws.Range("A$($CurrentRow):F$CurrentRow").Interior.Color = $ColorStepDisabled
+                    $ws.Range("A$($CurrentRow):F$CurrentRow").Font.Strikethrough = $true
+                } else {
+                    $ws.Range("A$($CurrentRow):F$CurrentRow").Interior.Color = $ColorStep
+                }
 
                 $FriendlyType = GetSequenceTypeFriendlyName $Entry.GetAttribute("type")
                 $ws.Range("B$CurrentRow").Cells = $FriendlyType
@@ -374,7 +390,7 @@ function Export-TSToExcel
                 {
                     $vartext += "$( $Variable.property ) = $( $Variable.InnerText )`n"
                 }
-                $ws.Range("E$CurrentRow").Cells = $vartext.TrimEnd()
+                $ws.Range("F$CurrentRow").Cells = $vartext.TrimEnd()
             }
 
             # groups
@@ -385,7 +401,13 @@ function Export-TSToExcel
                 } else {
                     $ws.Range("A$CurrentRow").IndentLevel = $IndentLevel
                 }
-                $ws.Range("A$($CurrentRow):E$CurrentRow").Interior.Color = $ColorGroup
+
+                if ($Disabled) {
+                    $ws.Range("A$($CurrentRow):F$CurrentRow").Interior.Color = $ColorGroupDisabled
+                    $ws.Range("A$($CurrentRow):F$CurrentRow").Font.Strikethrough = $true
+                } else {
+                    $ws.Range("A$($CurrentRow):F$CurrentRow").Interior.Color = $ColorGroup
+                }
                 $ws.Range("B$CurrentRow").Cells = "Group"
                 $ws.Range("A$( $CurrentRow ):B$( $CurrentRow )").Font.Bold = $true
 
@@ -406,7 +428,7 @@ function Export-TSToExcel
                 {
                     if ($Child.LocalName -eq "group" -or $Child.LocalName -eq "step")
                     {
-                        WriteEntry -Entry $Child -IndentLevel ($IndentLevel + 1)
+                        WriteEntry -Entry $Child -IndentLevel ($IndentLevel + 1) -Disabled $Disabled
                     }
                 }
 
@@ -470,18 +492,19 @@ function Export-TSToExcel
         }
 
         # set column sizes
-        $ws.Columns("A:E").ColumnWidth = 70
+        $ws.Columns("A:F").ColumnWidth = 70
         $ws.Columns.AutoFit() | Out-Null
         $ws.Columns("C").ColumnWidth = 70
-        ClampSize -Range $ws.Columns("E") -MaxWidth 100
+        $ws.Columns("E").ColumnWidth = 8.43
+        ClampSize -Range $ws.Columns("F") -MaxWidth 100
 
         for ($i = 3; $i -le $CurrentRow; $i++) {
             ClampSize -Range $ws.Rows("$i") -MaxHeight 40
         }
 
         # apply gray borders
-        $ws.Range("A2:E$CurrentRow").Borders.Color = 0x808080
-        $ws.Range("A2:E$CurrentRow").Borders.LineStyle = 1
+        $ws.Range("A2:F$CurrentRow").Borders.Color = 0x808080
+        $ws.Range("A2:F$CurrentRow").Borders.LineStyle = 1
 
         # freeze top row
         $ws.Rows("3").Select() | Out-Null
