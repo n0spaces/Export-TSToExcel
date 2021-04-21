@@ -1,9 +1,34 @@
+<# TSToExcel.ps1
+
+Copyright (c) 2021 Matt Schwartz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+#>
+
 <#
 .SYNOPSIS
 Export a Configuration Manager task sequence to an Excel sheet for documentation.
 
 .DESCRIPTION
-Long description
+This function generates an Excel sheet from a given Configuration Manager task sequence. It provides customizable and
+easy-to-navigate documentation, especially for large task sequences.
 
 .PARAMETER Xml
 The task sequence XML data.
@@ -26,7 +51,7 @@ name is obtained from that instead.
 Shows the Excel window after the sheet is generated.
 
 .PARAMETER Macro
-Adds macro-enabled buttons to the sheet that expand/collapse grouped task sequence steps.
+Adds macro-enabled buttons to the sheet that expand/collapse grouped task sequence steps. See notes for more info.
 
 .PARAMETER Outline
 Groups (outlines) rows that belong to the same task sequence group, so they can be expanded/collapsed. This is uglier
@@ -36,10 +61,38 @@ than the macro buttons (especially for nested groups), but doesn't required macr
 Hides the progress bar in the PowerShell window.
 
 .EXAMPLE
-Get-CMTaskSequence -name "Windows 10 Image" | Export-TSToExcel -ExportPath .\TaskSequence.xlsx
+PS>Get-CMTaskSequence -name "Windows 10 Image" | Export-TSToExcel -Show
+
+Generate an Excel sheet from the task sequence named "Windows 10 Image" and show it.
+
+.EXAMPLE
+PS>$ts = Get-CMTaskSequence -Name "Task Sequence"
+PS>Export-TSToExcel -TaskSequence $ts -ExportPath C:\ts.xlsx
+
+Generate an Excel sheet from the task sequence and save it to C:\ts.xlsx.
+
+.EXAMPLE
+PS>$sequence = (Get-CMTaskSequence -Name "Task Sequence").Sequence  # XML string
+PS>Export-TSToExcel -Xml $sequence -TSName "Task Sequence" -Macro -ExportPath C:\ts.xlsm -Show
+
+Generate an Excel sheet from the given task sequence XML data with macro buttons, save it to C:\ts.xlsm, and show it.
+
+.EXAMPLE
+PS>(Get-CMTaskSequence -Name "Task Sequence").Sequence | Out-File C:\ts.xml
+PS>Export-TSToExcel -XmlPath C:\ts.xml -TSName "Task Sequence" -Outline -ExportPath C:\ts.xlsx -HideProgress
+
+Generate an Excel sheet from an exported task sequence XML file with outlined groups, save it to C:\ts.xlsx, and hide
+the progress bar.
 
 .NOTES
-General notes
+If macro buttons are used, this script will require access to the VBA object model. If access is not allowed (which is
+the default behavior), the script will prompt if it's okay to change a registry setting to allow access. You can also
+set this manually in Excel by navigating to File > Options > Trust Center > Trust Center Settings... > Macro Settings,
+and checking "Trust access to the VBA project object model". **This will allow scripts and programs to modify and run
+macro scripts in Excel. Use wisely.**
+
+.LINK
+https://github.com/n0spaces/Export-TSToExcel
 #>
 function Export-TSToExcel
 {

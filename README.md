@@ -52,48 +52,48 @@ Export-TSToExcel -TaskSequence <Object> [-ExportPath <FileInfo>] [-Show] [-Macro
 ```
 
 ## Parameters
-### `-TaskSequence <Object>`
+#### -TaskSequence \<Object>
 A task sequence object obtained from the `Get-CMTaskSequence` cmdlet. This is
 also accepted as a pipeline.
 
-### `-Xml <XmlDocument>`
+#### -Xml \<XmlDocument>
 The task sequence steps as a string or XML object. This can be obtained from
 the `Sequence` property of a task sequence object.
 
-### `-XmlPath <FileInfo>`
+#### -XmlPath \<FileInfo>
 The file path to a task sequence XML file.
 
-### `ExportPath <FileInfo>`
+#### -ExportPath \<FileInfo>
 The path to save the Excel file. This must end in `.xlsx`, or `.xlsm` for
 macro-enabled files. If this is omitted, Excel will be shown after the sheet is
 generated so you can save it manually.
 
-### `-TSName <String>`
+#### -TSName \<String>
 The name of the task sequence that's displayed at the top of the Excel sheet.
 This is obtained automatically from the `-TaskSequence` parameter, and should
 be omitted if that's used. Otherwise, this will default to "Task Sequence" if
 omitted.
 
-### `-Show`
+#### -Show
 Shows Excel after the sheet is generated.
 
-### `-Macro`
+#### -Macro
 Includes macro buttons to expand/collapse groups. See the example for more
 info.
 
-### `-Outline`
+#### -Outline
 Groups (outlines) rows in the Excel sheet so they can be expanded/collapsed
 without the use of macro buttons.
 
-### `-HideProgress`
+#### -HideProgress
 Hides the progress bar in the PowerShell window.
 
 ## More Examples
 Generate an Excel sheet from a task sequence object (without using the
 pipeline), save it to the given path, and show it:
 ```powershell
-$ts = Get-CMTaskSequence -Name "Task Sequence"
-Export-TSToExcel -TaskSequence $ts -ExportPath C:\ts.xlsx -Show
+PS> $ts = Get-CMTaskSequence -Name "Task Sequence"
+PS> Export-TSToExcel -TaskSequence $ts -ExportPath C:\ts.xlsx -Show
 ```
 
 ----------------------
@@ -101,8 +101,8 @@ Export-TSToExcel -TaskSequence $ts -ExportPath C:\ts.xlsx -Show
 Generate an Excel sheet from task sequence XML data with macro buttons, save
 it, and show it:
 ```powershell
-$sequence = (Get-CMTaskSequence -Name "Task Sequence").Sequence  # XML string
-Export-TSToExcel -Xml $sequence -TSName "Task Sequence" -Macro -ExportPath C:\ts.xlsm -Show
+PS> $sequence = (Get-CMTaskSequence -Name "Task Sequence").Sequence  # XML string
+PS> Export-TSToExcel -Xml $sequence -TSName "Task Sequence" -Macro -ExportPath C:\ts.xlsm -Show
 ```
 
 Arrow buttons appear next to the group names. Clicking them will hide or show
@@ -126,8 +126,8 @@ wisely.**
 Generate an Excel sheet from a task sequence XML file with outlined groups,
 save it, and don't show the progress bar:
 ```powershell
-(Get-CMTaskSequence -Name "Task Sequence").Sequence | Out-File C:\ts.xml
-Export-TSToExcel -XmlPath C:\ts.xml -TSName "Task Sequence" -Outline -ExportPath C:\ts.xlsx -HideProgress
+PS> (Get-CMTaskSequence -Name "Task Sequence").Sequence | Out-File C:\ts.xml
+PS> Export-TSToExcel -XmlPath C:\ts.xml -TSName "Task Sequence" -Outline -ExportPath C:\ts.xlsx -HideProgress
 ```
 
 Outline groups in Excel can expand/collapse grouped rows.
@@ -136,3 +136,7 @@ Outline groups in Excel can expand/collapse grouped rows.
 
 They're less intuitive than the macro buttons, but don't require any special
 security permissions.
+
+## License
+This script is released under the MIT License. See [LICENSE.txt](LICENSE.txt)
+for more info.
